@@ -7,13 +7,6 @@ router.post("/message", async (req, res, next) => {
   try {
     const { message } = req.body;
 
-    // Validación: Verificar que el mensaje no sea vacío o inválido
-    if (!message || typeof message !== "string" || message.trim() === "") {
-      return res.status(400).json({
-        error: "El mensaje no es válido. Por favor, envía un mensaje válido.",
-      });
-    }
-
     // Pasar la solicitud al controlador
     await manejarMensaje(req, res);
   } catch (error) {
