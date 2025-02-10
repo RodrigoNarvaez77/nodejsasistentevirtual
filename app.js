@@ -1,27 +1,35 @@
 require("dotenv").config();
 const express = require("express");
 const app = express();
-const path = require("path");
 const helmet = require("helmet");
 const cors = require("cors");
 const openai = require("./routes/openairoutes"); // Importa las rutas
-const PORT = process.PORT || 3000;
+const PORT = process.env.PORT || 3000; // ✅ Corrección del puerto
 
-// Middleware para servir archivos estáticos desde la carpeta View
-//app.use(express.static(path.join(__dirname, "./View")));
+// ✅ Habilitar CORS ANTES de definir las rutas
+app.use(
+  cors({
+    origin: "*", // Permitir cualquier dominio
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    allowedHeaders: ["Content-Type"],
+  })
+);
 
-// Middleware para analizar los datos en formato JSON
-app.use(express.json()); // Esto es esencial para que req.body sea accesible como JSON
-
-app.use(cors({ origin: "*" })); // Permitir todas las solicitudes
-
-// Endpoint para cargar datos de una API
-//ruta del archivo
-app.use("/api/data", openai);
-
-// Usa Helmet para proteger tu app
+// ✅ Middleware de seguridad (Helmet)
 app.use(helmet());
 
+// ✅ Middleware para analizar JSON (esto debe estar antes de las rutas)
+app.use(express.json());
+
+// ✅ Rutas de la API (Asegurar que se definan después de CORS y JSON middleware)
+app.use("/api/data", openai);
+
+// ✅ Ruta de prueba para verificar si Render está respondiendo
+app.get("/", (req, res) => {
+  res.send("Servidor funcionando correctamente ✅");
+});
+
+// ✅ Iniciar el servidor
 app.listen(PORT, () => {
   console.log(`Servidor corriendo en http://localhost:${PORT}`);
 });
