@@ -3,6 +3,7 @@ const express = require("express");
 const app = express();
 const path = require("path");
 const helmet = require("helmet");
+const cors = require("cors");
 const openai = require("./routes/openairoutes"); // Importa las rutas
 const PORT = process.PORT || 3000;
 
@@ -11,6 +12,8 @@ const PORT = process.PORT || 3000;
 
 // Middleware para analizar los datos en formato JSON
 app.use(express.json()); // Esto es esencial para que req.body sea accesible como JSON
+
+app.use(cors({ origin: "*" })); // Permitir todas las solicitudes
 
 // Endpoint para cargar datos de una API
 //ruta del archivo
