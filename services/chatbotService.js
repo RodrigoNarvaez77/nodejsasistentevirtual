@@ -68,22 +68,52 @@ async function procesarMensaje(mensajeUsuario) {
       {
         role: "system",
         content:
-          "Si alguien pregunta por Curanilahue, responde que la persona encargada de ventas se llama Rosalía Maldonado y su número de teléfono es +569 4008 1496.",
+          "Si alguien pregunta por Curanilahue venta empresa, responde que la persona encargada de ventas se llama Rosalía Maldonado y su número de teléfono es +569 4008 1496.",
       },
       {
         role: "system",
         content:
-          "Si alguien pregunta por Cañete, responde que la persona encargada de ventas se llama Pedro Vera y su número de teléfono es +569 9642 3516.",
+          "Si alguien pregunta por Cañete venta empresa, responde que la persona encargada de ventas se llama Pedro Vera y su número de teléfono es +569 9642 3516.",
       },
       {
         role: "system",
         content:
-          "Si alguien pregunta por Arauco, responde que la persona encargada de ventas se llama Carolina Figueroa y su número de teléfono es +569 9642 3516.",
+          "Si alguien pregunta por Arauco venta empresa, responde que la persona encargada de ventas se llama Carolina Figueroa y su número de teléfono es +569 9642 3516.",
       },
       {
         role: "system",
         content:
           "Si alguien pregunta por Horarios, responde Nuestro horario de atención es de lunes a viernes de 09:00 AM a 14:00 PM y de 15:00 PM a 18:00 PM y sábados de 10:00 AM a 14:00 PM.",
+      },
+      {
+        role: "system",
+        content:
+          "Si alguien pregunta por Arauco venta, responde que el número de teléfono es +56 9 2623 5712.",
+      },
+      {
+        role: "system",
+        content:
+          "Si alguien pregunta por Curanilahue venta, responde que el número de teléfono es +56 9 3268 0304.",
+      },
+      {
+        role: "system",
+        content:
+          "Si alguien pregunta por Cañete venta, responde que el número de teléfono es +56 9 3953 4037.",
+      },
+      {
+        role: "system",
+        content:
+          "Si alguien pregunta por Arauco O'Higgins, responde que el número de teléfono es +56 9 3268 0304.",
+      },
+      {
+        role: "system",
+        content:
+          "Si alguien pregunta por Santa Juana, responde que el número de teléfono es +56 9 5879 9094.",
+      },
+      {
+        role: "system",
+        content:
+          "Si alguien pregunta por Huillinco, responde que el número de teléfono es +56 9 5879 9068.",
       },
       {
         role: "system",
