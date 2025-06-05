@@ -1,8 +1,6 @@
 const { OpenAI } = require("openai");
-const path = require("path");
-const fs = require("fs");
 const detectarCemento = require("./chatbot/detectarCemento");
-const buscarProducto = require("./chatbot/buscarProducto");
+const buscarProducto = require("../productos/productos"); // ← tu nueva función SQL Server
 const contextoSistema = require("./chatbot/contextoSistema");
 
 const openai = new OpenAI({
@@ -12,17 +10,21 @@ const openai = new OpenAI({
 async function procesarMensaje(mensajeUsuario) {
   const mensajeLower = mensajeUsuario.toLowerCase();
 
-  // 1️⃣ Cemento
+  // 1️⃣ Cemento (respuesta directa)
   const respuestaCemento = detectarCemento(mensajeUsuario);
   if (respuestaCemento) return respuestaCemento;
 
-  // 2️⃣ Productos - solo si hay coincidencia real en el nombre del producto
-  const productos = JSON.parse(
-    fs.readFileSync(path.join(__dirname, "../productos/productos.json"), "utf8")
-  );
+  // 2️⃣ Productos – ahora consultamos SQL Server directamente
+  try {
+    const productoEncontrado = await buscarProducto(mensajeLower); // SIN archivo JSON
+    console.log("🧪 Resultado de búsqueda SQL:", productoEncontrado);
 
-  const productoEncontrado = buscarProducto(mensajeLower, productos);
-  if (productoEncontrado.encontrado) return productoEncontrado.mensaje;
+    if (productoEncontrado.encontrado) {
+      return productoEncontrado.mensaje;
+    }
+  } catch (error) {
+    console.error("❌ Error al buscar producto:", error);
+  }
 
   // 3️⃣ GPT (último recurso)
   const completion = await openai.chat.completions.create({
