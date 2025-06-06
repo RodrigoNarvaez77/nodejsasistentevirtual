@@ -17,67 +17,43 @@ async function buscarProducto(consulta) {
   try {
     const pool = await sql.connect(config);
 
-    // 1️⃣ Limpiar frase y separar palabras
+    // 1️⃣ Normalizar y limpiar palabras
     const palabras = consulta
       .toLowerCase()
       .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "") // Eliminar tildes
-      .split(/\s+/);
+      .replace(/[\u0300-\u036f]/g, "") // eliminar tildes
+      .replace(/[.,!?¿¡]/g, "") // quitar puntuación
+      .split(/\s+/)
+      .filter((p) => p.length > 2 && /^[a-z]+$/.test(p)); // solo palabras útiles
 
-    // 2️⃣ Palabras irrelevantes (stopwords)
-    const stopwords = new Set([
-      "el",
-      "la",
+    // 2️⃣ Palabras comunes a ignorar, incluso si existen en productos
+    const ignorarSiCoincide = new Set([
+      "hola",
       "los",
       "las",
-      "un",
-      "una",
-      "unos",
-      "unas",
-      "de",
-      "del",
-      "al",
-      "por",
-      "para",
-      "con",
-      "en",
-      "a",
-      "hola",
       "me",
-      "te",
-      "lo",
-      "le",
-      "les",
-      "que",
+      "por",
+      "dame",
+      "el",
+      "del",
+      "una",
       "cuanto",
-      "cual",
-      "procio",
-      "precio",
-      "dime",
-      "decir",
-      "hay",
-      "si",
-      "y",
-      "yo",
-      ".",
-      ",",
-      "tu",
-      "usted",
-      "quiero",
-      "busco",
-      "valor",
       "cuesta",
-      "consulta",
-      "informacion",
+      "precio",
+      "valor",
+      "quiero",
+      "hay",
+      "tienen",
+      "usted",
+      "necesito",
       "producto",
+      "productos",
     ]);
 
-    const palabrasFiltradas = palabras.filter((p) => !stopwords.has(p));
+    const coincidencias = [];
 
-    let palabraClave = null;
-
-    // 3️⃣ Buscar palabra clave válida en productos
-    for (const palabra of palabrasFiltradas) {
+    // 3️⃣ Buscar palabras que realmente coincidan con productos (y no sean irrelevantes)
+    for (const palabra of palabras) {
       const result = await pool
         .request()
         .input("consulta", sql.VarChar, `%${palabra}%`).query(`
@@ -86,47 +62,58 @@ async function buscarProducto(consulta) {
           WHERE LOWER(NOKOPR) COLLATE Latin1_General_CI_AI LIKE @consulta
         `);
 
-      if (result.recordset.length > 0) {
-        palabraClave = palabra;
-        break;
+      if (result.recordset.length > 0 && !ignorarSiCoincide.has(palabra)) {
+        coincidencias.push(palabra);
       }
     }
 
-    // 4️⃣ Si no se encontró ninguna palabra válida
-    if (!palabraClave) {
+    // 4️⃣ Si no hay coincidencias útiles
+    if (coincidencias.length === 0) {
       return {
         encontrado: false,
         mensaje: "❌ No se reconoció ningún producto en tu consulta.",
       };
     }
 
-    // 5️⃣ Consulta principal con palabra clave detectada
-    const productos = await pool
-      .request()
-      .input("consulta", sql.VarChar, `%${palabraClave}%`).query(`
-        SELECT 
-          TABSU.NOKOSU AS SUCURSAL,
-          NOKOPR AS NOMBRE_PRODUCTO,
-          MAEST.STFI1 AS STOCK_FISICO,
-          PP01UD AS PRECIO_BRUTO
-        FROM MAEST
-        INNER JOIN MAEPR ON MAEPR.KOPR = MAEST.KOPR
-        INNER JOIN (SELECT * FROM TABPRE WHERE KOLT = '02P') PBRUTO 
-          ON PBRUTO.KOPR = MAEPR.KOPR
-        INNER JOIN TABSU ON TABSU.KOSU = MAEST.KOSU
-        WHERE 
-          MAEST.KOPR NOT LIKE '%ZZ%' AND  
-          MAEST.KOSU NOT LIKE '901' AND
-          LOWER(NOKOPR) COLLATE Latin1_General_CI_AI LIKE @consulta
-        ORDER BY STOCK_FISICO DESC;
-      `);
+    // 5️⃣ Armar consulta con todas las palabras válidas encontradas
+    const condiciones = coincidencias
+      .map(
+        (palabra, idx) =>
+          `LOWER(NOKOPR) COLLATE Latin1_General_CI_AI LIKE @palabra${idx}`
+      )
+      .join(" OR ");
 
-    const rows = productos.recordset;
+    const request = pool.request();
+    coincidencias.forEach((p, idx) =>
+      request.input(`palabra${idx}`, sql.VarChar, `%${p}%`)
+    );
+
+    const resultado = await request.query(`
+      SELECT 
+        TABSU.NOKOSU AS SUCURSAL,
+        NOKOPR AS NOMBRE_PRODUCTO,
+        MAEST.STFI1 AS STOCK_FISICO,
+        PP01UD AS PRECIO_BRUTO
+      FROM MAEST
+      INNER JOIN MAEPR ON MAEPR.KOPR = MAEST.KOPR
+      INNER JOIN (SELECT * FROM TABPRE WHERE KOLT = '02P') PBRUTO 
+        ON PBRUTO.KOPR = MAEPR.KOPR
+      INNER JOIN TABSU ON TABSU.KOSU = MAEST.KOSU
+      WHERE 
+        MAEST.KOPR NOT LIKE '%ZZ%' AND  
+        MAEST.KOSU NOT LIKE '901' AND
+        (${condiciones})
+      ORDER BY STOCK_FISICO DESC;
+    `);
+
+    const rows = resultado.recordset;
 
     if (rows.length === 0) {
       return {
         encontrado: false,
-        mensaje: `⚠️ No se encontraron productos relacionados con "${palabraClave}".`,
+        mensaje: `⚠️ No se encontraron productos relacionados con: ${coincidencias.join(
+          ", "
+        )}`,
       };
     }
 
@@ -143,7 +130,9 @@ async function buscarProducto(consulta) {
 
     return {
       encontrado: true,
-      mensaje: `🔍 Productos encontrados relacionados con "${palabraClave}":\n${mensaje}`,
+      mensaje: `🔍 Productos encontrados relacionados con: ${coincidencias.join(
+        ", "
+      )}\n${mensaje}`,
     };
   } catch (err) {
     console.error("❌ Error al buscar producto:", err);
