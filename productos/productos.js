@@ -13,55 +13,76 @@ const config = {
   },
 };
 
-// 👉 Palabras irrelevantes aunque existan en productos
-const ignorarGenericos = new Set([
-  "hola",
-  "los",
-  "las",
-  "me",
-  "por",
-  "dame",
-  "el",
-  "del",
-  "una",
-  "cuanto",
-  "cuesta",
-  "precio",
-  "valor",
-  "quiero",
-  "hay",
-  "tienen",
-  "usted",
-  "necesito",
-  "producto",
-  "productos",
-  "casa",
-  "construccion",
-  "hogar",
-  "edificio",
-  "galpon",
-  "hacer",
-  "construir",
-]);
+// Diccionario de alias de sucursales
+const aliasSucursales = {
+  chue: "CURANILAHUE",
+  sj: "SANTA JUANA",
+  arauco: "CASA MATRIZ ARAUCO",
+  canete: "CAÑETE",
+  ohi: "BODEGA OHIGGINS",
+  huillinco: "HUILLINCO",
+};
 
-// 🔍 Limpia y separa palabras útiles
+// Función para limpiar la frase del usuario
 function limpiarConsulta(texto) {
   return texto
     .toLowerCase()
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "") // tildes
-    .replace(/[.,!?¿¡]/g, "") // puntuación
+    .replace(/[\u0300-\u036f]/g, "") // eliminar tildes
+    .replace(/[.,!?¿¡]/g, "") // quitar signos
     .split(/\s+/)
-    .filter((p) => p.length > 2 && /^[a-z]+$/.test(p));
+    .filter((p) => p.length > 2 && /^[a-z]+$/.test(p)); // solo palabras válidas
 }
 
 async function buscarProducto(consulta) {
   try {
     const pool = await sql.connect(config);
 
+    const consultaOriginal = consulta.toLowerCase();
     const palabras = limpiarConsulta(consulta);
     const coincidencias = [];
 
+    // 🧭 Buscar sucursal mencionada en el texto
+    let sucursalDetectada = null;
+    for (const [alias, nombre] of Object.entries(aliasSucursales)) {
+      if (consultaOriginal.includes(alias)) {
+        sucursalDetectada = nombre;
+        break;
+      }
+    }
+
+    // Palabras irrelevantes (no deberían activar búsqueda)
+    const ignorarGenericos = new Set([
+      "hola",
+      "los",
+      "las",
+      "me",
+      "por",
+      "dame",
+      "el",
+      "del",
+      "una",
+      "cuanto",
+      "cuesta",
+      "precio",
+      "valor",
+      "quiero",
+      "hay",
+      "tienen",
+      "usted",
+      "necesito",
+      "producto",
+      "productos",
+      "casa",
+      "construccion",
+      "hogar",
+      "edificio",
+      "galpon",
+      "hacer",
+      "construir",
+    ]);
+
+    // 🧠 Buscar palabras que sí estén en los productos
     for (const palabra of palabras) {
       const result = await pool
         .request()
@@ -76,25 +97,16 @@ async function buscarProducto(consulta) {
       }
     }
 
-    // 🛑 Si no se detectan palabras útiles
+    // ⛔ No se detectaron productos útiles
     if (coincidencias.length === 0) {
       return {
         encontrado: false,
-        mensaje: `🛠️ No se detectó ningún producto específico en tu mensaje.
-
-¿Estás buscando materiales de construcción? Puedes consultar por:
-- Cemento
-- Planchas OSB
-- Madera
-- Perfiles metálicos
-- Clavos, tornillos
-- Pintura, techumbre, aislantes
-
-Ejemplo: "¿Tienen cemento?" o "precio planchas osb"`,
+        mensaje:
+          '🛠️ No se detectó ningún producto específico en tu mensaje.\n\n¿Estás buscando materiales de construcción? Puedes consultar por:\n- Cemento\n- Planchas OSB\n- Madera\n- Perfiles metálicos\n- Clavos, tornillos\n- Pintura, techumbre, aislantes\n\nEjemplo: "¿Tienen cemento?" o "precio planchas osb"',
       };
     }
 
-    // ✅ Armar condiciones SQL
+    // 🧾 Armar condiciones del SQL
     const condiciones = coincidencias
       .map(
         (palabra, idx) =>
@@ -106,6 +118,10 @@ Ejemplo: "¿Tienen cemento?" o "precio planchas osb"`,
     coincidencias.forEach((palabra, idx) =>
       request.input(`palabra${idx}`, sql.VarChar, `%${palabra}%`)
     );
+
+    if (sucursalDetectada) {
+      request.input("sucursal", sql.VarChar, sucursalDetectada);
+    }
 
     const resultado = await request.query(`
       SELECT 
@@ -122,6 +138,7 @@ Ejemplo: "¿Tienen cemento?" o "precio planchas osb"`,
         MAEST.KOPR NOT LIKE '%ZZ%' AND  
         MAEST.KOSU NOT LIKE '901' AND
         (${condiciones})
+        ${sucursalDetectada ? "AND TABSU.NOKOSU = @sucursal" : ""}
       ORDER BY STOCK_FISICO DESC;
     `);
 
@@ -151,7 +168,7 @@ Ejemplo: "¿Tienen cemento?" o "precio planchas osb"`,
       encontrado: true,
       mensaje: `🔍 Productos encontrados relacionados con: ${coincidencias.join(
         ", "
-      )}\n${mensaje}`,
+      )}${sucursalDetectada ? " en " + sucursalDetectada : ""}\n${mensaje}`,
     };
   } catch (err) {
     console.error("❌ Error al buscar producto:", err);
