@@ -59,6 +59,8 @@ async function buscarProducto(consulta) {
       "si",
       "y",
       "yo",
+      ".",
+      ",",
       "tu",
       "usted",
       "quiero",
