@@ -23,17 +23,19 @@ async function buscarProducto(consulta) {
       .request()
       .input("consulta", sql.VarChar, `%${consultaLimpia}%`).query(`
         SELECT 
-          KOSU AS SUCURSAL,
-          KOBO AS BODEGA,
-          MAEST.KOPR AS CODIGO_PRODUCTO,
-          NOKOPR AS NOMBRE_PRODUCTO,
-          MAEST.STFI1 AS STOCK_FISICO,
-          PP01UD AS PRECIO_BRUTO
-        FROM MAEST
-        INNER JOIN MAEPR ON MAEPR.KOPR = MAEST.KOPR
-        INNER JOIN TABPRE PBRUTO ON PBRUTO.KOPR = MAEPR.KOPR
-        WHERE LOWER(NOKOPR) COLLATE Latin1_General_CI_AI LIKE @consulta
-        ORDER BY MAEST.STFI1 DESC
+  TABSU.NOKOSU AS SUCURSAL,
+  NOKOPR AS NOMBRE_PRODUCTO,
+  MAEST.STFI1 AS STOCK_FISICO,
+  PP01UD AS PRECIO_BRUTO
+FROM MAEST
+INNER JOIN MAEPR ON MAEPR.KOPR = MAEST.KOPR
+INNER JOIN (SELECT * FROM TABPRE WHERE KOLT = '02P') PBRUTO 
+  ON PBRUTO.KOPR = MAEPR.KOPR
+INNER JOIN TABSU ON TABSU.KOSU = MAEST.KOSU
+WHERE 
+  MAEST.KOPR NOT LIKE '%ZZ%' AND  MAEST.KOSU not like '901' AND
+  LOWER(NOKOPR) COLLATE Latin1_General_CI_AI LIKE @consulta
+ORDER BY STOCK_FISICO DESC;
       `);
 
     const rows = result.recordset;
@@ -43,9 +45,11 @@ async function buscarProducto(consulta) {
     const mensaje = rows
       .map(
         (p) =>
-          `🧰 ${p.NOMBRE_PRODUCTO} – $${p.PRECIO_BRUTO.toLocaleString(
-            "es-CL"
-          )} (${p.STOCK_FISICO} unidades en stock)`
+          `🧰 ${p.SUCURSAL}${
+            p.NOMBRE_PRODUCTO
+          } – $${p.PRECIO_BRUTO.toLocaleString("es-CL")} (${
+            p.STOCK_FISICO
+          } unidades en stock)`
       )
       .join("\n");
 
