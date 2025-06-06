@@ -13,25 +13,24 @@ const config = {
   },
 };
 
-// Diccionario de alias de sucursales
-const aliasSucursales = {
-  chue: "CURANILAHUE",
-  sj: "SANTA JUANA",
-  arauco: "CASA MATRIZ ARAUCO",
-  canete: "CAÑETE",
-  ohi: "BODEGA OHIGGINS",
-  huillinco: "HUILLINCO",
-};
+// Solo nombres reales, como aparecen en la base de datos
+const nombresSucursales = [
+  "SUCURSAL CURANILAHUE",
+  "SUCURSAL SANTA JUANA",
+  "CASA MATRIZ ARAUCO",
+  "SUCURSAL CAÑETE",
+  "BODEGA OHIGGINS",
+  "BODEGA HUILLINCO",
+];
 
-// Función para limpiar la frase del usuario
 function limpiarConsulta(texto) {
   return texto
     .toLowerCase()
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "") // eliminar tildes
-    .replace(/[.,!?¿¡]/g, "") // quitar signos
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[.,!?¿¡]/g, "")
     .split(/\s+/)
-    .filter((p) => p.length > 2 && /^[a-z]+$/.test(p)); // solo palabras válidas
+    .filter((p) => p.length > 2 && /^[a-z]+$/.test(p));
 }
 
 async function buscarProducto(consulta) {
@@ -42,16 +41,20 @@ async function buscarProducto(consulta) {
     const palabras = limpiarConsulta(consulta);
     const coincidencias = [];
 
-    // 🧭 Buscar sucursal mencionada en el texto
+    // ✅ Buscar nombre real de sucursal dentro de la consulta
     let sucursalDetectada = null;
-    for (const [alias, nombre] of Object.entries(aliasSucursales)) {
-      if (consultaOriginal.includes(alias)) {
-        sucursalDetectada = nombre;
+    for (const sucursal of nombresSucursales) {
+      const normalizado = sucursal
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "");
+
+      if (consultaOriginal.includes(normalizado)) {
+        sucursalDetectada = sucursal;
         break;
       }
     }
 
-    // Palabras irrelevantes (no deberían activar búsqueda)
     const ignorarGenericos = new Set([
       "hola",
       "los",
@@ -82,7 +85,6 @@ async function buscarProducto(consulta) {
       "construir",
     ]);
 
-    // 🧠 Buscar palabras que sí estén en los productos
     for (const palabra of palabras) {
       const result = await pool
         .request()
@@ -97,7 +99,6 @@ async function buscarProducto(consulta) {
       }
     }
 
-    // ⛔ No se detectaron productos útiles
     if (coincidencias.length === 0) {
       return {
         encontrado: false,
@@ -106,7 +107,6 @@ async function buscarProducto(consulta) {
       };
     }
 
-    // 🧾 Armar condiciones del SQL
     const condiciones = coincidencias
       .map(
         (palabra, idx) =>
@@ -138,7 +138,11 @@ async function buscarProducto(consulta) {
         MAEST.KOPR NOT LIKE '%ZZ%' AND  
         MAEST.KOSU NOT LIKE '901' AND
         (${condiciones})
-        ${sucursalDetectada ? "AND TABSU.NOKOSU = @sucursal" : ""}
+        ${
+          sucursalDetectada
+            ? "AND LOWER(TABSU.NOKOSU) COLLATE Latin1_General_CI_AI = LOWER(@sucursal)"
+            : ""
+        }
       ORDER BY STOCK_FISICO DESC;
     `);
 
@@ -156,7 +160,7 @@ async function buscarProducto(consulta) {
     const mensaje = rows
       .map(
         (p) =>
-          `🧰 ${p.SUCURSAL}${
+          `🧰 ${p.SUCURSAL} ${
             p.NOMBRE_PRODUCTO
           } – $${p.PRECIO_BRUTO.toLocaleString("es-CL")} (${
             p.STOCK_FISICO
