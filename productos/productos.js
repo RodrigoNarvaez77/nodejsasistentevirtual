@@ -13,46 +13,55 @@ const config = {
   },
 };
 
+// 👉 Palabras irrelevantes aunque existan en productos
+const ignorarGenericos = new Set([
+  "hola",
+  "los",
+  "las",
+  "me",
+  "por",
+  "dame",
+  "el",
+  "del",
+  "una",
+  "cuanto",
+  "cuesta",
+  "precio",
+  "valor",
+  "quiero",
+  "hay",
+  "tienen",
+  "usted",
+  "necesito",
+  "producto",
+  "productos",
+  "casa",
+  "construccion",
+  "hogar",
+  "edificio",
+  "galpon",
+  "hacer",
+  "construir",
+]);
+
+// 🔍 Limpia y separa palabras útiles
+function limpiarConsulta(texto) {
+  return texto
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // tildes
+    .replace(/[.,!?¿¡]/g, "") // puntuación
+    .split(/\s+/)
+    .filter((p) => p.length > 2 && /^[a-z]+$/.test(p));
+}
+
 async function buscarProducto(consulta) {
   try {
     const pool = await sql.connect(config);
 
-    // 1️⃣ Normalizar y limpiar palabras
-    const palabras = consulta
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "") // eliminar tildes
-      .replace(/[.,!?¿¡]/g, "") // quitar puntuación
-      .split(/\s+/)
-      .filter((p) => p.length > 2 && /^[a-z]+$/.test(p)); // solo palabras útiles
-
-    // 2️⃣ Palabras comunes a ignorar, incluso si existen en productos
-    const ignorarSiCoincide = new Set([
-      "hola",
-      "los",
-      "las",
-      "me",
-      "por",
-      "dame",
-      "el",
-      "del",
-      "una",
-      "cuanto",
-      "cuesta",
-      "precio",
-      "valor",
-      "quiero",
-      "hay",
-      "tienen",
-      "usted",
-      "necesito",
-      "producto",
-      "productos",
-    ]);
-
+    const palabras = limpiarConsulta(consulta);
     const coincidencias = [];
 
-    // 3️⃣ Buscar palabras que realmente coincidan con productos (y no sean irrelevantes)
     for (const palabra of palabras) {
       const result = await pool
         .request()
@@ -62,20 +71,30 @@ async function buscarProducto(consulta) {
           WHERE LOWER(NOKOPR) COLLATE Latin1_General_CI_AI LIKE @consulta
         `);
 
-      if (result.recordset.length > 0 && !ignorarSiCoincide.has(palabra)) {
+      if (result.recordset.length > 0 && !ignorarGenericos.has(palabra)) {
         coincidencias.push(palabra);
       }
     }
 
-    // 4️⃣ Si no hay coincidencias útiles
+    // 🛑 Si no se detectan palabras útiles
     if (coincidencias.length === 0) {
       return {
         encontrado: false,
-        mensaje: "❌ No se reconoció ningún producto en tu consulta.",
+        mensaje: `🛠️ No se detectó ningún producto específico en tu mensaje.
+
+¿Estás buscando materiales de construcción? Puedes consultar por:
+- Cemento
+- Planchas OSB
+- Madera
+- Perfiles metálicos
+- Clavos, tornillos
+- Pintura, techumbre, aislantes
+
+Ejemplo: "¿Tienen cemento?" o "precio planchas osb"`,
       };
     }
 
-    // 5️⃣ Armar consulta con todas las palabras válidas encontradas
+    // ✅ Armar condiciones SQL
     const condiciones = coincidencias
       .map(
         (palabra, idx) =>
@@ -84,8 +103,8 @@ async function buscarProducto(consulta) {
       .join(" OR ");
 
     const request = pool.request();
-    coincidencias.forEach((p, idx) =>
-      request.input(`palabra${idx}`, sql.VarChar, `%${p}%`)
+    coincidencias.forEach((palabra, idx) =>
+      request.input(`palabra${idx}`, sql.VarChar, `%${palabra}%`)
     );
 
     const resultado = await request.query(`
