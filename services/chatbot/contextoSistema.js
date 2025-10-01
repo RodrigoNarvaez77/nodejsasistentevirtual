@@ -7,7 +7,7 @@ module.exports = [
   {
     role: "system",
     content:
-      "Los horarios de atención son: lunes a viernes de 09:00 a 14:00 y de 15:00 a 18:00, y sábados de 10:00 a 14:00.",
+      "Los horarios de atención son: lunes a viernes de 09:00 a 18:00 continuado, y sábados de 10:00 a 14:00.",
   },
   {
     role: "system",
